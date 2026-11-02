@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>勤怠</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <!-- 読み込み中 -->
+    <section id="view-loading" class="view">
+      <p class="muted">読み込み中…</p>
+    </section>
+
+    <!-- エラー -->
+    <section id="view-error" class="view" hidden>
+      <h1>うまく開けませんでした</h1>
+      <p id="error-message"></p>
+      <button type="button" onclick="location.reload()">もう一度開く</button>
+    </section>
+
+    <!-- 未登録の人だけが見る画面 -->
+    <section id="view-register" class="view" hidden>
+      <h1>はじめに登録</h1>
+      <p>管理者から受け取った<strong>招待コード</strong>を入れてください。</p>
+      <form id="register-form">
+        <input id="invite-code" type="text" autocomplete="off" autocapitalize="characters"
+               placeholder="例：WORKER-AB12CD34" required>
+        <button type="submit">登録する</button>
+      </form>
+      <p id="register-message" class="error"></p>
+    </section>
+
+    <!-- 労働者画面 -->
+    <section id="view-worker" class="view" hidden>
+      <p class="badge">労働者</p>
+      <h1 class="greeting"></h1>
+      <div class="grid">
+        <button type="button" disabled>出勤</button>
+        <button type="button" disabled>退勤</button>
+        <button type="button" disabled>履歴</button>
+        <button type="button" disabled>修正申請</button>
+        <button type="button" disabled>給与明細</button>
+        <button type="button" disabled>言語</button>
+      </div>
+      <p class="muted">ボタンは Phase 2 以降で使えるようになります。</p>
+    </section>
+
+    <!-- 管理者画面 -->
+    <section id="view-admin" class="view" hidden>
+      <p class="badge admin">管理者</p>
+      <h1 class="greeting"></h1>
+      <div class="grid">
+        <button type="button" disabled>勤怠確認</button>
+        <button type="button" disabled>承認</button>
+        <button type="button" disabled>給与計算</button>
+        <button type="button" disabled>グラフ・PDF</button>
+        <button type="button" disabled>従業員管理</button>
+        <button type="button" disabled>設定</button>
+      </div>
+      <p class="muted">ボタンは Phase 2 以降で使えるようになります。</p>
+    </section>
+  </main>
+
+  <!-- LINE公式のLIFF SDK -->
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
