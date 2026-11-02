@@ -59,8 +59,9 @@ function render(res) {
   }
   const view = res.role === 'admin' ? 'admin' : 'worker';
   // サーバーから来た文字は textContent で入れる（HTMLとして解釈させない）
+  const who = res.name ? res.name + ' さん' : 'ようこそ';
   document.querySelector('#view-' + view + ' .greeting').textContent =
-    (res.name || '') + ' さん（' + (res.farmName || '') + '）';
+    who + (res.farmName ? '（' + res.farmName + '）' : '');
   show(view);
 }
 
