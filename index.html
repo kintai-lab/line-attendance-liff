@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>勤怠</title>
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
   <main>
@@ -37,15 +37,55 @@
       <p class="badge">労働者</p>
       <h1 class="greeting"></h1>
       <div class="grid">
-        <button type="button" disabled>出勤</button>
-        <button type="button" disabled>退勤</button>
-        <button type="button" disabled>履歴</button>
+        <button type="button" data-go="clock_in">出勤</button>
+        <button type="button" data-go="clock_out">退勤</button>
+        <button type="button" data-go="history">履歴</button>
         <button type="button" disabled>修正申請</button>
         <button type="button" disabled>給与明細</button>
         <button type="button" disabled>言語</button>
       </div>
-      <p class="muted">ボタンは Phase 2 以降で使えるようになります。</p>
-      <p class="muted perm-test"></p>
+      <p class="muted" id="worker-note">修正申請は Phase 3、給与明細は Phase 4、言語は Phase 6 で使えるようになります。</p>
+    </section>
+
+    <!-- 出勤 -->
+    <section id="view-clock_in" class="view" hidden>
+      <p class="badge">出勤</p>
+      <p class="clock-now"></p>
+      <p id="clock-in-status" class="muted"></p>
+      <button type="button" id="clock-in-button">出勤する</button>
+      <p id="clock-in-result" class="result"></p>
+      <button type="button" class="secondary" data-go="home">メニューに戻る</button>
+    </section>
+
+    <!-- 退勤 -->
+    <section id="view-clock_out" class="view" hidden>
+      <p class="badge">退勤</p>
+      <p class="clock-now"></p>
+      <p id="clock-out-status" class="muted"></p>
+      <form id="clock-out-form">
+        <label for="break-minutes">休憩時間（分）</label>
+        <input id="break-minutes" type="number" inputmode="numeric" min="0" max="600" step="1" required>
+        <button type="submit" id="clock-out-button">退勤する</button>
+      </form>
+      <p id="clock-out-result" class="result"></p>
+      <button type="button" class="secondary" data-go="home">メニューに戻る</button>
+    </section>
+
+    <!-- 履歴 -->
+    <section id="view-history" class="view" hidden>
+      <p class="badge">履歴</p>
+      <div class="month-nav">
+        <button type="button" class="secondary" id="prev-month">前の月</button>
+        <h1 id="history-month"></h1>
+        <button type="button" class="secondary" id="next-month">次の月</button>
+      </div>
+      <p id="history-total" class="total"></p>
+      <table class="history">
+        <thead><tr><th>日付</th><th>出勤</th><th>退勤</th><th>休憩</th><th>勤務</th></tr></thead>
+        <tbody id="history-rows"></tbody>
+      </table>
+      <p id="history-empty" class="muted" hidden>この月の記録はありません。</p>
+      <button type="button" class="secondary" data-go="home">メニューに戻る</button>
     </section>
 
     <!-- 管理者画面 -->
@@ -60,14 +100,13 @@
         <button type="button" disabled>従業員管理</button>
         <button type="button" disabled>設定</button>
       </div>
-      <p class="muted">ボタンは Phase 2 以降で使えるようになります。</p>
-      <p class="muted perm-test"></p>
+      <p class="muted">管理者の機能は Phase 3 以降で使えるようになります。</p>
     </section>
   </main>
 
   <!-- LINE公式のLIFF SDK -->
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="config.js?v=4"></script>
-  <script src="app.js?v=4"></script>
+  <script src="config.js?v=5"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>
