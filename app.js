@@ -167,7 +167,9 @@ document.getElementById('clock-out-form').addEventListener('submit', async funct
     } else if (res.error === 'already_clocked_out') {
       result.textContent = 'すでに退勤しています（' + res.clockOut + '）';
     } else if (res.error === 'invalid_break') {
-      result.textContent = '休憩時間は 0〜' + res.maxBreak + ' 分で入れてください。';
+      result.textContent = res.maxBreak < 600
+        ? '出勤してから ' + duration(res.maxBreak) + 'しかたっていないため、休憩は 0〜' + res.maxBreak + ' 分で入れてください。'
+        : '休憩時間は 0〜600 分で入れてください。';
     } else {
       result.textContent = errorText(res);
     }
@@ -264,6 +266,7 @@ setInterval(tick, 10000);
 function duration(minutes) {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
+  if (h === 0) return m + '分';
   return h + '時間' + (m ? m + '分' : '');
 }
 
