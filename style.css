@@ -79,3 +79,21 @@ label { display: block; margin: 12px 0 6px; color: var(--muted); }
 table.history { width: 100%; border-collapse: collapse; font-size: 0.9rem; background: var(--card); }
 table.history th, table.history td { padding: 8px 4px; border-bottom: 1px solid #e3e7e3; text-align: center; }
 table.history th { color: var(--muted); font-weight: normal; }
+
+h2 { font-size: 1.05rem; margin: 20px 0 8px; }
+.small { font-size: 0.8rem; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+select, textarea { width: 100%; padding: 12px; margin-bottom: 12px; border: 1px solid #c9cfc9; border-radius: 12px; font-size: 1rem; background: #fff; font-family: inherit; }
+.list { list-style: none; padding: 0; margin: 0; }
+.list li { background: var(--card); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; font-size: 0.9rem; }
+.tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.75rem; margin-left: 6px; background: #e3e7e3; }
+.tag.pending { background: #fff3cd; color: #7a5a00; }
+.tag.approved { background: #d7f5e3; color: #046b31; }
+.tag.rejected { background: #fde2e1; color: #a1221a; }
+.alert { background: #fff3cd; color: #7a5a00; border-radius: 12px; padding: 10px 12px; margin: 12px 0; }
+.alert li { background: transparent; padding: 2px 0; margin: 0; }
+.card { background: var(--card); border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+.card .row { display: flex; gap: 8px; margin-top: 8px; }
+.card .row button { padding: 10px; }
+button.danger { background: var(--error); }
+tr.warn td { color: var(--error); }
