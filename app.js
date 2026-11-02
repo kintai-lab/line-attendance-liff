@@ -63,6 +63,18 @@ function render(res) {
   document.querySelector('#view-' + view + ' .greeting').textContent =
     who + (res.farmName ? '（' + res.farmName + '）' : '');
   show(view);
+  checkAdminPermission(view);
+}
+
+// Phase 1 の確認用：管理者専用の窓口を呼んで、サーバーが通すか断るかを表示する
+async function checkAdminPermission(view) {
+  const el = document.querySelector('#view-' + view + ' .perm-test');
+  try {
+    const res = await api('adminPing');
+    el.textContent = '権限テスト：管理者専用の窓口 → ' + (res.ok ? '通れる' : '拒否（' + res.error + '）');
+  } catch (err) {
+    el.textContent = '権限テスト：通信に失敗しました';
+  }
 }
 
 document.getElementById('register-form').addEventListener('submit', async function (e) {
