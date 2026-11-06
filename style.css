@@ -97,3 +97,14 @@ select, textarea { width: 100%; padding: 12px; margin-bottom: 12px; border: 1px 
 .card .row button { padding: 10px; }
 button.danger { background: var(--error); }
 tr.warn td { color: var(--error); }
+button.admin-btn { background: var(--admin); margin-top: 12px; }
+table.slip { width: 100%; border-collapse: collapse; font-size: 0.9rem; background: var(--card); margin-bottom: 8px; }
+table.slip th { text-align: left; font-weight: normal; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid #e3e7e3; width: 50%; }
+table.slip td { text-align: right; padding: 6px 8px; border-bottom: 1px solid #e3e7e3; }
+table.slip td input { margin: 0; padding: 6px 8px; text-align: right; border-radius: 8px; }
+table.slip.totals th, table.slip.totals td { font-weight: bold; color: var(--text); }
+table.slip.totals tr:last-child td { font-size: 1.1rem; color: var(--green); }
+tr.clickable td:first-child { color: var(--admin); text-decoration: underline; }
+.slip-head { margin: 16px 0 4px; font-weight: bold; }
+#pr-rows td { font-size: 0.8rem; white-space: nowrap; }
+#pr-rows td:first-child { white-space: normal; }

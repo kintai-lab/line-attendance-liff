@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>勤怠</title>
-  <link rel="stylesheet" href="style.css?v=7">
+  <link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
   <main>
@@ -41,10 +41,10 @@
         <button type="button" data-go="clock_out">退勤</button>
         <button type="button" data-go="history">履歴</button>
         <button type="button" data-go="fix_request">修正申請</button>
-        <button type="button" disabled>給与明細</button>
+        <button type="button" data-go="payslip">給与明細</button>
         <button type="button" disabled>言語</button>
       </div>
-      <p class="muted" id="worker-note">給与明細は Phase 4、言語は Phase 6 で使えるようになります。</p>
+      <p class="muted" id="worker-note">言語は Phase 6 で使えるようになります。</p>
       <button type="button" class="secondary" id="back-to-admin" hidden>管理者画面に戻る</button>
     </section>
 
@@ -121,12 +121,12 @@
       <div class="grid">
         <button type="button" data-admin="attendance">勤怠確認</button>
         <button type="button" data-admin="approval">承認</button>
-        <button type="button" disabled>給与計算</button>
+        <button type="button" data-admin="payroll">給与計算</button>
         <button type="button" disabled>グラフ・PDF</button>
         <button type="button" disabled>従業員管理</button>
         <button type="button" disabled>設定</button>
       </div>
-      <p class="muted">給与計算は Phase 4、グラフ・PDF は Phase 5、従業員管理・設定は Phase 6 で使えるようになります。</p>
+      <p class="muted">グラフ・PDF は Phase 5、従業員管理・設定は Phase 6 で使えるようになります。</p>
       <button type="button" class="secondary" id="my-attendance" hidden>自分の出退勤</button>
     </section>
 
@@ -174,6 +174,42 @@
       <button type="button" class="secondary" data-admin="home">管理者画面に戻る</button>
     </section>
 
+    <!-- 給与明細（働く人） -->
+    <section id="view-payslip" class="view" hidden>
+      <p class="badge">給与明細</p>
+      <p id="ps-status" class="muted"></p>
+      <div id="ps-months" class="grid"></div>
+      <div id="ps-detail"></div>
+      <button type="button" class="secondary" data-go="home">メニューに戻る</button>
+    </section>
+
+    <!-- 給与計算（管理者） -->
+    <section id="view-payroll" class="view" hidden>
+      <p class="badge admin">給与計算</p>
+      <div class="month-nav">
+        <button type="button" class="secondary" id="pr-prev">前の月</button>
+        <h1 id="pr-month"></h1>
+        <button type="button" class="secondary" id="pr-next">次の月</button>
+      </div>
+      <p id="pr-status" class="total"></p>
+      <div id="pr-blockers" class="alert" hidden><strong>確定できません</strong><ul class="list"></ul></div>
+      <div id="pr-warnings" class="alert" hidden><strong>確認してください</strong><ul class="list"></ul></div>
+      <table class="history">
+        <thead><tr><th>名前</th><th>日数</th><th>総支給</th><th>控除</th><th>差引</th></tr></thead>
+        <tbody id="pr-rows"></tbody>
+      </table>
+      <p class="muted small">名前を押すと、明細を開いて所得税などを入れられます。</p>
+      <div id="pr-detail"></div>
+      <p id="pr-result" class="result"></p>
+      <button type="button" id="pr-confirm" class="admin-btn" hidden>この月を確定する</button>
+      <div id="pr-cancel-box" hidden>
+        <label for="pr-cancel-reason">確定を取り消す理由（必須）</label>
+        <textarea id="pr-cancel-reason" rows="2" maxlength="200" placeholder="例：所得税の入れ間違い"></textarea>
+        <button type="button" id="pr-cancel" class="danger">確定を取り消す</button>
+      </div>
+      <button type="button" class="secondary" data-admin="home">管理者画面に戻る</button>
+    </section>
+
     <!-- 承認（管理者） -->
     <section id="view-approval" class="view" hidden>
       <p class="badge admin">承認</p>
@@ -185,7 +221,7 @@
 
   <!-- LINE公式のLIFF SDK -->
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="config.js?v=7"></script>
-  <script src="app.js?v=7"></script>
+  <script src="config.js?v=8"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>
