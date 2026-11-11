@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>勤怠</title>
-  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
   <main>
@@ -122,11 +122,11 @@
         <button type="button" data-admin="attendance">勤怠確認</button>
         <button type="button" data-admin="approval">承認</button>
         <button type="button" data-admin="payroll">給与計算</button>
-        <button type="button" disabled>グラフ・PDF</button>
+        <button type="button" data-admin="reports">グラフ・PDF</button>
         <button type="button" disabled>従業員管理</button>
         <button type="button" disabled>設定</button>
       </div>
-      <p class="muted">グラフ・PDF は Phase 5、従業員管理・設定は Phase 6 で使えるようになります。</p>
+      <p class="muted">従業員管理・設定は Phase 6 で使えるようになります。</p>
       <button type="button" class="secondary" id="my-attendance" hidden>自分の出退勤</button>
     </section>
 
@@ -210,6 +210,30 @@
       <button type="button" class="secondary" data-admin="home">管理者画面に戻る</button>
     </section>
 
+    <!-- グラフ・PDF（管理者） -->
+    <section id="view-reports" class="view" hidden>
+      <p class="badge admin">グラフ・PDF</p>
+      <div class="month-nav">
+        <button type="button" class="secondary" id="rp-prev">前の月</button>
+        <h1 id="rp-month"></h1>
+        <button type="button" class="secondary" id="rp-next">次の月</button>
+      </div>
+      <p id="rp-status" class="muted"></p>
+      <h2>月ごとの推移（6か月）</h2>
+      <div id="rp-trend" class="bars"></div>
+      <p class="muted small">労働時間は給与計算と同じ区切り（15分単位）をかけた時間。人件費は確定した月の総支給額です。</p>
+      <h2>人ごとの労働時間</h2>
+      <div id="rp-people" class="bars"></div>
+      <p id="rp-people-empty" class="muted" hidden>この月の勤務の記録はありません。</p>
+      <p class="muted small"><span class="key"></span>うち残業</p>
+      <h2>給与明細PDF・一覧CSV</h2>
+      <p id="rp-export-note" class="muted"></p>
+      <button type="button" id="rp-export" class="admin-btn" hidden>PDF・CSVを作る</button>
+      <p id="rp-result" class="result"></p>
+      <ul id="rp-files" class="list"></ul>
+      <button type="button" class="secondary" data-admin="home">管理者画面に戻る</button>
+    </section>
+
     <!-- 承認（管理者） -->
     <section id="view-approval" class="view" hidden>
       <p class="badge admin">承認</p>
@@ -221,7 +245,7 @@
 
   <!-- LINE公式のLIFF SDK -->
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="config.js?v=8"></script>
-  <script src="app.js?v=8"></script>
+  <script src="config.js?v=9"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>

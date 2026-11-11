@@ -39,6 +39,7 @@ const ERROR_TEXT = {
   invalid_amount: '金額・日数の入れ方が正しくありません（数字だけで入れてください）。',
   bad_request: '入力が正しくありません。',
 };
+ERROR_TEXT.not_confirmed = 'この月はまだ確定していません。給与計算で確定してから作ってください。';
 
 // 給与明細：農家さんの紙と同じ項目・同じ並び。単位 H は「分」で届くので時間に直して出す
 const SLIP_LAYOUT = [
@@ -77,12 +78,13 @@ const STATUS_TEXT = { pending: '申請中', approved: '承認済み', rejected: 
 
 // メニューのページ名 → 画面
 const WORKER_PAGES = { clock_in: 'clock_in', clock_out: 'clock_out', history: 'history', fix_request: 'fix_request', payslip: 'payslip' };
-const ADMIN_PAGES = { attendance: 'attendance', approval: 'approval', payroll: 'payroll' };
+const ADMIN_PAGES = { attendance: 'attendance', approval: 'approval', payroll: 'payroll', reports: 'reports' };
 
 let me = null;
 let historyMonth = null;
 let overviewMonth = null;
 let payrollMonth = null;
+let reportMonth = null;
 
 main();
 
@@ -157,6 +159,7 @@ function openAdminPage(view) {
   if (view === 'attendance') loadOverview(null);
   if (view === 'approval') loadRequests();
   if (view === 'payroll') loadPayroll(shiftYm(ymdLocal(0).slice(0, 7), -1));
+  if (view === 'reports') loadReports(shiftYm(ymdLocal(0).slice(0, 7), -1));
 }
 
 // ---- 出勤 ----
@@ -683,6 +686,99 @@ document.getElementById('pr-cancel').addEventListener('click', async function ()
     btn.disabled = false;
   }
 });
+
+// ---- グラフ・PDF（管理者） ----
+
+async function loadReports(month) {
+  const status = document.getElementById('rp-status');
+  status.textContent = '集計中…';
+  document.getElementById('rp-result').textContent = '';
+  document.getElementById('rp-files').textContent = '';
+  const res = await api('reportSummary', { month: month });
+  if (!res.ok) { status.textContent = errorText(res); return; }
+  status.textContent = '';
+  reportMonth = res.month;
+  document.getElementById('rp-month').textContent = ymLabel(res.month);
+
+  // 月ごとの推移：棒の長さは6か月のうち一番長い月を100%にする
+  const trend = document.getElementById('rp-trend');
+  trend.textContent = '';
+  const maxMin = Math.max.apply(null, res.trend.map(function (t) { return t.minutes; }).concat([1]));
+  res.trend.forEach(function (t) {
+    const row = barRow(Number(t.month.split('-')[1]) + '月', t.minutes / maxMin, 0, hoursText(t.minutes));
+    if (t.month === res.month) row.classList.add('current');
+    row.appendChild(line('人件費 ' + (t.gross === null ? '未確定' : yen(t.gross)), 'div')).className = 'sub';
+    trend.appendChild(row);
+  });
+
+  const people = document.getElementById('rp-people');
+  people.textContent = '';
+  const maxP = Math.max.apply(null, res.people.map(function (p) { return p.minutes; }).concat([1]));
+  res.people.forEach(function (p) {
+    people.appendChild(barRow(p.name, (p.minutes - p.overtimeMinutes) / maxP, p.overtimeMinutes / maxP, hoursText(p.minutes)));
+  });
+  document.getElementById('rp-people-empty').hidden = res.people.length > 0;
+
+  document.getElementById('rp-export').hidden = !res.confirmed;
+  document.getElementById('rp-export-note').textContent = res.confirmed
+    ? '確定した明細から、PDF（1人ずつ・全員分）と一覧CSVを作って、Googleドライブに保存します。'
+    : 'この月はまだ確定していません。給与計算で確定すると作れます。';
+}
+
+function barRow(label, ratio, otRatio, value) {
+  const row = document.createElement('div');
+  row.className = 'bar-row';
+  row.appendChild(line(label, 'div')).className = 'label';
+  const track = document.createElement('div');
+  track.className = 'track';
+  const fill = document.createElement('div');
+  fill.className = 'fill';
+  fill.style.width = (ratio * 100).toFixed(1) + '%';
+  track.appendChild(fill);
+  if (otRatio > 0) {
+    const ot = document.createElement('div');
+    ot.className = 'ot';
+    ot.style.width = (otRatio * 100).toFixed(1) + '%';
+    track.appendChild(ot);
+  }
+  row.appendChild(track);
+  row.appendChild(line(value, 'div')).className = 'val';
+  return row;
+}
+
+document.getElementById('rp-prev').addEventListener('click', function () { loadReports(shiftYm(reportMonth, -1)); });
+document.getElementById('rp-next').addEventListener('click', function () { loadReports(shiftYm(reportMonth, 1)); });
+
+document.getElementById('rp-export').addEventListener('click', async function () {
+  const btn = this;
+  const result = document.getElementById('rp-result');
+  const ul = document.getElementById('rp-files');
+  ul.textContent = '';
+  result.textContent = '作成中…（10〜30秒ほどかかります）';
+  btn.disabled = true;
+  try {
+    const res = await api('reportExport', { month: reportMonth });
+    if (!res.ok) { result.textContent = errorText(res); return; }
+    result.textContent = 'Googleドライブに保存しました。押すと開きます。';
+    res.files.concat([{ name: '保存したフォルダを開く', url: res.folderUrl }]).forEach(function (f) {
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.href = f.url;
+      a.textContent = f.name;
+      // LINEの中ではなく、ふだんのブラウザ（Googleにログイン済み）で開く
+      a.addEventListener('click', function (e) { e.preventDefault(); liff.openWindow({ url: f.url, external: true }); });
+      li.appendChild(a);
+      ul.appendChild(li);
+    });
+  } catch (err) {
+    result.textContent = '通信に失敗しました。';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+function ymLabel(ym) { const p = ym.split('-'); return p[0] + '年' + Number(p[1]) + '月'; }
+function hoursText(minutes) { return hours(minutes / 60) + '時間'; }
 
 // ---- 給与明細（働く人） ----
 
