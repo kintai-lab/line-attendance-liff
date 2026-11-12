@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>勤怠</title>
-  <link rel="stylesheet" href="style.css?v=10">
+  <link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
   <main>
@@ -30,6 +30,8 @@
       <h1>はじめに登録<br><span class="sub-lang">Pendaftaran</span></h1>
       <p>管理者から受け取った<strong>招待コード</strong>を入れてください。<br>
          <span class="sub-lang">Masukkan <strong>kode undangan</strong> yang Anda terima dari atasan.</span></p>
+      <p id="register-inactive" class="alert" hidden>このLINEは今は使えません。新しい招待コードを受け取った場合は、入れてください。<br>
+         <span class="sub-lang">LINE ini tidak dapat digunakan saat ini. Jika Anda menerima kode undangan baru, masukkan di sini.</span></p>
       <form id="register-form">
         <input id="invite-code" type="text" autocomplete="off" autocapitalize="characters"
                placeholder="WORKER-AB12CD34" required>
@@ -146,6 +148,7 @@
         <button type="button" data-admin="settings">設定</button>
       </div>
       <button type="button" class="secondary" id="my-attendance" hidden>自分の出退勤</button>
+      <p class="footer-link"><a href="privacy.html">プライバシーポリシー</a></p>
     </section>
 
     <!-- 勤怠確認（管理者） -->
@@ -239,7 +242,7 @@
       <p id="rp-status" class="muted"></p>
       <h2>月ごとの推移（6か月）</h2>
       <div id="rp-trend" class="bars"></div>
-      <p class="muted small">労働時間は給与計算と同じ区切り（15分単位）をかけた時間。人件費は確定した月の総支給額です。</p>
+      <p class="muted small">労働時間は給与計算と同じ区切り（設定の「勤務時間の区切り」）をかけた時間。人件費は確定した月の総支給額です。</p>
       <h2>人ごとの労働時間</h2>
       <div id="rp-people" class="bars"></div>
       <p id="rp-people-empty" class="muted" hidden>この月の勤務の記録はありません。</p>
@@ -317,8 +320,8 @@
 
   <!-- LINE公式のLIFF SDK -->
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-  <script src="config.js?v=10"></script>
-  <script src="i18n.js?v=10"></script>
-  <script src="app.js?v=10"></script>
+  <script src="config.js?v=11"></script>
+  <script src="i18n.js?v=11"></script>
+  <script src="app.js?v=11"></script>
 </body>
 </html>

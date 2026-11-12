@@ -45,6 +45,7 @@ Object.assign(ERROR_TEXT, {
   invalid_wage: '時給は 1〜10000 の数字で入れてください。',
   retired: 'この人は退職しています。',
   self_retire: '自分自身は退職にできません。',
+  self_reissue: '自分の招待コードは再発行できません（働く人として登録し直すことになり、管理者がいなくなるため）。',
   invalid_setting: '設定の値が正しくありません。',
 });
 
@@ -134,7 +135,11 @@ function errorText(res) {
 function route(page) {
   applyLang(me.language);
   if (!me.ok) return showError(errorText(me));
-  if (!me.registered) return show('register');
+  if (!me.registered) {
+    // 退職などで止まっているLINE：新しい招待コードがあれば登録し直せる
+    document.getElementById('register-inactive').hidden = !me.inactive;
+    return show('register');
+  }
 
   if (me.role === 'admin') {
     if (ADMIN_PAGES[page]) return openAdminPage(ADMIN_PAGES[page]);
@@ -145,6 +150,8 @@ function route(page) {
 }
 
 function showHome(view) {
+  // 管理者の画面は日本語、働く人の画面はその人の言語
+  applyLang(view === 'admin' ? 'ja' : me.language);
   const who = me.name ? t('greeting', me.name) : t('welcome');
   // サーバーから来た文字は textContent で入れる（HTMLとして解釈させない）
   document.querySelector('#view-' + view + ' .greeting').textContent =
@@ -156,6 +163,7 @@ function showHome(view) {
 }
 
 function openWorkerPage(view) {
+  applyLang(me.language);
   show(view);
   if (view === 'clock_in') loadClockIn();
   if (view === 'clock_out') loadClockOut();
@@ -166,6 +174,7 @@ function openWorkerPage(view) {
 }
 
 function openAdminPage(view) {
+  applyLang('ja');
   show(view);
   if (view === 'attendance') loadOverview(null);
   if (view === 'approval') loadRequests();
@@ -419,10 +428,11 @@ async function loadOverview(month) {
   // 直接修正の従業員リスト
   const select = document.getElementById('edit-emp');
   if (!select.options.length) {
-    res.rows.forEach(function (r) {
+    // 退職した人も選べる（退職日の押し忘れなどを直すため）
+    res.editable.forEach(function (r) {
       const opt = document.createElement('option');
       opt.value = r.employeeId;
-      opt.textContent = r.name;
+      opt.textContent = r.name + (r.retired ? '（退職）' : '');
       select.appendChild(opt);
     });
     const dateInput = document.getElementById('edit-date');
@@ -927,6 +937,7 @@ function openEmployee(employeeId) {
   lang.value = e.language;
   form.appendChild(lang);
   form.appendChild(line('言語を変えると、本人の画面とメニューもその言語になります。', 'p')).className = 'muted small';
+  form.appendChild(line('時給を変えると、まだ確定していない月の給与も新しい時給で計算されます。前の月の給与を先に確定してから変えてください。', 'p')).className = 'muted small';
   const save = button('名前・時給・言語を保存', 'admin-btn');
   save.addEventListener('click', function () {
     empAction(save, msg, 'adminEmployeeSave', { employeeId: e.employeeId, name: name.value.trim(), hourlyWage: wage.value.trim(), language: lang.value }, '保存しました。');
@@ -944,24 +955,26 @@ function openEmployee(employeeId) {
   savePay.addEventListener('click', function () {
     const values = {};
     PAY_ITEM_KEYS.forEach(function (k) { values[k] = inputs[k].value.trim(); });
-    empAction(savePay, msg, 'adminPayItemsSave', { employeeId: e.employeeId, values: values }, '控除・手当を保存しました。次の給与計算から使われます。');
+    empAction(savePay, msg, 'adminPayItemsSave', { employeeId: e.employeeId, values: values }, '控除・手当を保存しました。今月から先の、まだ確定していない給与に入ります（前の月は変わりません）。');
   });
   pay.appendChild(savePay);
   box.appendChild(pay);
 
-  // 招待コードの再発行
+  // 招待コードの再発行（自分の分は出さない：働く人として登録し直すことになり、管理者がいなくなるため）
+  const isMe = e.employeeId === employees.myEmployeeId;
   const inv = document.createElement('div');
   inv.className = 'card';
   inv.appendChild(line('招待コード', 'strong'));
-  inv.appendChild(line(e.registered ? 'LINE登録済みです。スマホを替えたときなどに、新しいコードを出せます（前のLINEは使えなくなります）。'
+  inv.appendChild(line(isMe ? 'あなた自身の分です。自分の招待コードは再発行できません。'
+    : e.registered ? 'LINE登録済みです。LINEのアカウントを引き継がずに新しいスマホにしたときなどに、新しいコードを出せます。'
     : e.inviteCode ? '今のコード：' + e.inviteCode + '（有効期限 ' + e.inviteExpires + '）' : '使えるコードがありません。', 'p')).className = 'muted small';
   const reissue = button('招待コードを再発行', 'secondary');
   reissue.addEventListener('click', async function () {
-    if (!confirm('新しい招待コードを出します。前のコードは使えなくなります。よろしいですか？')) return;
+    if (!confirm('新しい招待コードを出します。前のコードは使えなくなり、新しいコードで登録すると前のLINEも使えなくなります。よろしいですか？')) return;
     const res = await empAction(reissue, msg, 'adminInviteReissue', { employeeId: e.employeeId }, '新しい招待コードを出しました。');
     if (res && res.ok) showInvite(e.employeeId, res.inviteCode);
   });
-  inv.appendChild(reissue);
+  if (!isMe) inv.appendChild(reissue);
   box.appendChild(inv);
 
   // 退職
