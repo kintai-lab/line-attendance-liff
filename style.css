@@ -118,3 +118,14 @@ tr.clickable td:first-child { color: var(--admin); text-decoration: underline; }
 .bar-row .sub { grid-column: 2 / 4; color: var(--muted); font-size: 0.8rem; margin-top: -4px; }
 .bar-row.current .label { font-weight: bold; }
 #rp-files a { color: var(--admin); word-break: break-all; }
+.sub-lang { font-size: 0.85em; color: var(--muted); font-weight: normal; }
+.footer-link { text-align: center; margin-top: 24px; font-size: 0.85rem; }
+.footer-link a { color: var(--muted); }
+.lang-btn.chosen { outline: 3px solid #046b31; }
+.ja-sub { display: block; font-size: 0.72rem; color: var(--muted); }
+.ja-sub-inline { font-size: 0.75rem; color: var(--muted); font-weight: normal; }
+.card.emp .link { color: var(--admin); text-decoration: underline; cursor: pointer; }
+.card.retired { opacity: 0.6; }
+.card.invite .code { font-size: 1.4rem; font-weight: bold; letter-spacing: 1px; margin: 8px 0; }
+.card.invite pre { white-space: pre-wrap; background: #f6f7f5; border-radius: 8px; padding: 8px; font-size: 0.85rem; font-family: inherit; }
+#view-employees label, #view-settings label { margin-top: 8px; }

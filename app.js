@@ -40,6 +40,13 @@ const ERROR_TEXT = {
   bad_request: '入力が正しくありません。',
 };
 ERROR_TEXT.not_confirmed = 'この月はまだ確定していません。給与計算で確定してから作ってください。';
+Object.assign(ERROR_TEXT, {
+  invalid_name: '名前を入れてください（40文字まで）。',
+  invalid_wage: '時給は 1〜10000 の数字で入れてください。',
+  retired: 'この人は退職しています。',
+  self_retire: '自分自身は退職にできません。',
+  invalid_setting: '設定の値が正しくありません。',
+});
 
 // 給与明細：農家さんの紙と同じ項目・同じ並び。単位 H は「分」で届くので時間に直して出す
 const SLIP_LAYOUT = [
@@ -74,11 +81,12 @@ const CHECK_TEXT = {
   month_not_ended: function () { return 'この月はまだ終わっていません。確定すると、この月の出退勤や修正ができなくなります。'; },
 };
 
-const STATUS_TEXT = { pending: '申請中', approved: '承認済み', rejected: '却下' };
+// 申請の状態（働く人の画面では言語に合わせる）
+function statusText(status) { return MSG['status_' + status] ? t('status_' + status) : status; }
 
 // メニューのページ名 → 画面
-const WORKER_PAGES = { clock_in: 'clock_in', clock_out: 'clock_out', history: 'history', fix_request: 'fix_request', payslip: 'payslip' };
-const ADMIN_PAGES = { attendance: 'attendance', approval: 'approval', payroll: 'payroll', reports: 'reports' };
+const WORKER_PAGES = { clock_in: 'clock_in', clock_out: 'clock_out', history: 'history', fix_request: 'fix_request', payslip: 'payslip', language: 'language' };
+const ADMIN_PAGES = { attendance: 'attendance', approval: 'approval', payroll: 'payroll', reports: 'reports', employees: 'employees', settings: 'settings' };
 
 let me = null;
 let historyMonth = null;
@@ -119,10 +127,12 @@ async function api(action, data) {
 }
 
 function errorText(res) {
-  return ERROR_TEXT[res.error] || 'エラーが起きました（' + res.error + '）';
+  if (LANG === 'id' && ERROR_TEXT_ID[res.error]) return ERROR_TEXT_ID[res.error];
+  return ERROR_TEXT[res.error] || t('error_any', res.error);
 }
 
 function route(page) {
+  applyLang(me.language);
   if (!me.ok) return showError(errorText(me));
   if (!me.registered) return show('register');
 
@@ -135,7 +145,7 @@ function route(page) {
 }
 
 function showHome(view) {
-  const who = me.name ? me.name + ' さん' : 'ようこそ';
+  const who = me.name ? t('greeting', me.name) : t('welcome');
   // サーバーから来た文字は textContent で入れる（HTMLとして解釈させない）
   document.querySelector('#view-' + view + ' .greeting').textContent =
     who + (me.farmName ? '（' + me.farmName + '）' : '');
@@ -152,6 +162,7 @@ function openWorkerPage(view) {
   if (view === 'history') loadHistory(null);
   if (view === 'fix_request') loadFixRequest();
   if (view === 'payslip') loadPayslipList();
+  if (view === 'language') loadLanguage();
 }
 
 function openAdminPage(view) {
@@ -160,6 +171,8 @@ function openAdminPage(view) {
   if (view === 'approval') loadRequests();
   if (view === 'payroll') loadPayroll(shiftYm(ymdLocal(0).slice(0, 7), -1));
   if (view === 'reports') loadReports(shiftYm(ymdLocal(0).slice(0, 7), -1));
+  if (view === 'employees') loadEmployees();
+  if (view === 'settings') loadSettings();
 }
 
 // ---- 出勤 ----
@@ -168,14 +181,14 @@ async function loadClockIn() {
   const status = document.getElementById('clock-in-status');
   const button = document.getElementById('clock-in-button');
   document.getElementById('clock-in-result').textContent = '';
-  status.textContent = '確認中…';
+  status.textContent = t('checking');
   button.hidden = true;
 
-  const t = await api('today');
-  if (!t.ok) { status.textContent = errorText(t); return; }
-  if (t.state === 'working') { status.textContent = 'すでに出勤しています（' + t.clockIn + '）'; return; }
-  if (t.state === 'done') { status.textContent = '今日はすでに退勤しています（' + t.clockOut + '）'; return; }
-  status.textContent = '出勤しますか？';
+  const today = await api('today');
+  if (!today.ok) { status.textContent = errorText(today); return; }
+  if (today.state === 'working') { status.textContent = t('already_in', today.clockIn); return; }
+  if (today.state === 'done') { status.textContent = t('already_done', today.clockOut); return; }
+  status.textContent = t('ask_in');
   button.hidden = false;
 }
 
@@ -188,16 +201,16 @@ document.getElementById('clock-in-button').addEventListener('click', async funct
     if (res.ok) {
       button.hidden = true;
       document.getElementById('clock-in-status').textContent = '';
-      result.textContent = res.clockIn + ' に出勤しました';
+      result.textContent = t('done_in', res.clockIn);
     } else if (res.error === 'already_clocked_in') {
-      result.textContent = 'すでに出勤しています（' + res.clockIn + '）';
+      result.textContent = t('already_in', res.clockIn);
     } else if (res.error === 'already_done_today') {
-      result.textContent = '今日はすでに退勤しています（' + res.clockOut + '）';
+      result.textContent = t('already_done', res.clockOut);
     } else {
       result.textContent = errorText(res);
     }
   } catch (err) {
-    result.textContent = '通信に失敗しました。電波のよい所でもう一度押してください。';
+    result.textContent = t('network');
   } finally {
     button.disabled = false;
   }
@@ -209,15 +222,15 @@ async function loadClockOut() {
   const status = document.getElementById('clock-out-status');
   const form = document.getElementById('clock-out-form');
   document.getElementById('clock-out-result').textContent = '';
-  status.textContent = '確認中…';
+  status.textContent = t('checking');
   form.hidden = true;
 
-  const t = await api('today');
-  if (!t.ok) { status.textContent = errorText(t); return; }
-  if (t.state === 'none') { status.textContent = ERROR_TEXT.not_clocked_in; return; }
-  if (t.state === 'done') { status.textContent = '今日はすでに退勤しています（' + t.clockOut + '）'; return; }
-  status.textContent = '出勤：' + t.clockIn;
-  document.getElementById('break-minutes').value = t.defaultBreak;
+  const today = await api('today');
+  if (!today.ok) { status.textContent = errorText(today); return; }
+  if (today.state === 'none') { status.textContent = errorText({ error: 'not_clocked_in' }); return; }
+  if (today.state === 'done') { status.textContent = t('already_done', today.clockOut); return; }
+  status.textContent = t('clocked_in_at', today.clockIn);
+  document.getElementById('break-minutes').value = today.defaultBreak;
   form.hidden = false;
 }
 
@@ -227,7 +240,7 @@ document.getElementById('clock-out-form').addEventListener('submit', async funct
   const result = document.getElementById('clock-out-result');
   const value = document.getElementById('break-minutes').value;
   if (value === '' || !/^\d+$/.test(value)) {
-    result.textContent = '休憩時間を分（数字）で入れてください。';
+    result.textContent = t('break_number');
     return;
   }
   button.disabled = true;
@@ -236,18 +249,16 @@ document.getElementById('clock-out-form').addEventListener('submit', async funct
     if (res.ok) {
       e.target.hidden = true;
       document.getElementById('clock-out-status').textContent = '';
-      result.textContent = res.clockOut + ' に退勤しました。今日の勤務：' + duration(res.workMinutes);
+      result.textContent = t('done_out', res.clockOut, duration(res.workMinutes));
     } else if (res.error === 'already_clocked_out') {
-      result.textContent = 'すでに退勤しています（' + res.clockOut + '）';
+      result.textContent = t('already_out', res.clockOut);
     } else if (res.error === 'invalid_break') {
-      result.textContent = res.maxBreak < 600
-        ? '出勤してから ' + duration(res.maxBreak) + 'しかたっていないため、休憩は 0〜' + res.maxBreak + ' 分で入れてください。'
-        : '休憩時間は 0〜600 分で入れてください。';
+      result.textContent = res.maxBreak < 600 ? t('break_short', duration(res.maxBreak), res.maxBreak) : t('break_max');
     } else {
       result.textContent = errorText(res);
     }
   } catch (err) {
-    result.textContent = '通信に失敗しました。電波のよい所でもう一度押してください。';
+    result.textContent = t('network');
   } finally {
     button.disabled = false;
   }
@@ -261,21 +272,20 @@ async function loadHistory(month) {
   const total = document.getElementById('history-total');
   tbody.textContent = '';
   empty.hidden = true;
-  total.textContent = '読み込み中…';
+  total.textContent = t('loading');
 
   const res = await api('history', month ? { month: month } : {});
   if (!res.ok) { total.textContent = errorText(res); return; }
 
   historyMonth = res.month;
-  const parts = res.month.split('-');
-  document.getElementById('history-month').textContent = parts[0] + '年' + Number(parts[1]) + '月';
-  total.textContent = '合計：' + duration(res.totalMinutes) + '（' + res.rows.filter(function (r) { return r.workMinutes !== null; }).length + '日）';
+  document.getElementById('history-month').textContent = monthLabel(res.month);
+  total.textContent = t('total', duration(res.totalMinutes), res.rows.filter(function (r) { return r.workMinutes !== null; }).length);
 
   res.rows.forEach(function (r) {
     const tr = document.createElement('tr');
     const d = r.date.split('-');
-    [Number(d[1]) + '/' + Number(d[2]), r.clockIn, r.clockOut || '退勤なし',
-     r.breakMinutes === null ? '−' : r.breakMinutes + '分',
+    [Number(d[1]) + '/' + Number(d[2]), r.clockIn, r.clockOut || t('no_clock_out'),
+     r.breakMinutes === null ? '−' : duration(r.breakMinutes),
      r.workMinutes === null ? '−' : duration(r.workMinutes)].forEach(function (text) {
       const td = document.createElement('td');
       td.textContent = text;
@@ -312,13 +322,13 @@ async function loadFixForm() {
   const current = document.getElementById('fix-current');
   const date = document.getElementById('fix-date').value;
   form.hidden = true;
-  current.textContent = '確認中…';
+  current.textContent = t('checking');
 
   const res = await api('fixForm', { date: date });
   if (!res.ok) { current.textContent = errorText(res); return; }
-  current.textContent = '今の記録：' + describe(res.current);
-  if (res.locked) { current.textContent += '（この月は給与が確定しているため、申請できません）'; return; }
-  if (res.pending) { current.textContent += '（この日は申請中です）'; return; }
+  current.textContent = t('current', describe(res.current));
+  if (res.locked) { current.textContent += t('locked_fix'); return; }
+  if (res.pending) { current.textContent += t('pending_day'); return; }
 
   document.getElementById('fix-in').value = res.current ? pad5(res.current.clockIn) : '';
   document.getElementById('fix-out').value = res.current && res.current.clockOut ? pad5(res.current.clockOut) : '';
@@ -337,8 +347,8 @@ document.getElementById('fix-form').addEventListener('submit', async function (e
   const result = document.getElementById('fix-result');
   const reason = document.getElementById('fix-reason').value.trim();
   const brk = document.getElementById('fix-break').value;
-  if (!reason) { result.textContent = ERROR_TEXT.reason_required; return; }
-  if (!/^\d+$/.test(brk)) { result.textContent = '休憩時間を分（数字）で入れてください。'; return; }
+  if (!reason) { result.textContent = errorText({ error: 'reason_required' }); return; }
+  if (!/^\d+$/.test(brk)) { result.textContent = t('break_number'); return; }
 
   const button = document.getElementById('fix-submit');
   button.disabled = true;
@@ -352,15 +362,15 @@ document.getElementById('fix-form').addEventListener('submit', async function (e
     });
     if (res.ok) {
       e.target.hidden = true;
-      result.textContent = '申請しました。管理者の承認を待ってください。';
+      result.textContent = t('fix_sent');
       loadFixList();
     } else if (res.error === 'invalid_break') {
-      result.textContent = '休憩は 0〜' + res.maxBreak + ' 分で入れてください。';
+      result.textContent = t('break_range', res.maxBreak);
     } else {
       result.textContent = errorText(res);
     }
   } catch (err) {
-    result.textContent = '通信に失敗しました。電波のよい所でもう一度押してください。';
+    result.textContent = t('network');
   } finally {
     button.disabled = false;
   }
@@ -374,9 +384,9 @@ async function loadFixList() {
   if (!res.ok) return;
   res.rows.forEach(function (r) {
     const li = document.createElement('li');
-    li.appendChild(text(shortDate(r.date) + '　' + r.clockIn + '〜' + r.clockOut + ' 休憩' + r.breakMinutes + '分'));
+    li.appendChild(text(shortDate(r.date) + '　' + r.clockIn + '〜' + r.clockOut + t('break_min', r.breakMinutes)));
     li.appendChild(tag(r.status));
-    if (r.status === 'rejected' && r.rejectReason) li.appendChild(line('却下の理由：' + r.rejectReason));
+    if (r.status === 'rejected' && r.rejectReason) li.appendChild(line(t('reject_reason', r.rejectReason)));
     ul.appendChild(li);
   });
   empty.hidden = res.rows.length > 0;
@@ -404,7 +414,7 @@ async function loadOverview(month) {
 
   const parts = res.month.split('-');
   document.getElementById('ov-month').textContent = parts[0] + '年' + Number(parts[1]) + '月';
-  fillRows('month-rows', res.rows.map(function (r) { return [r.name, r.days + '日', duration(r.totalMinutes)]; }));
+  fillRows('month-rows', res.rows.map(function (r) { return [r.name, r.days + '日', duration(r.totalMinutes, 'ja')]; }));
 
   // 直接修正の従業員リスト
   const select = document.getElementById('edit-emp');
@@ -436,7 +446,7 @@ async function loadEditDay() {
     date: document.getElementById('edit-date').value,
   });
   if (!res.ok) { current.textContent = errorText(res); return; }
-  current.textContent = '今の記録：' + describe(res.current);
+  current.textContent = '今の記録：' + describe(res.current, 'ja');
   if (res.locked) { current.textContent += '（この月は給与が確定しているため、直せません）'; return; }
   document.getElementById('edit-in').value = res.current ? pad5(res.current.clockIn) : '';
   document.getElementById('edit-out').value = res.current && res.current.clockOut ? pad5(res.current.clockOut) : '';
@@ -502,7 +512,7 @@ async function loadRequests() {
     const card = document.createElement('div');
     card.className = 'card';
     card.appendChild(line(r.name + '　' + shortDate(r.date), 'strong'));
-    card.appendChild(line('今：' + describe(r.current)));
+    card.appendChild(line('今：' + describe(r.current, 'ja')));
     card.appendChild(line('申請：' + r.clockIn + '〜' + r.clockOut + ' 休憩' + r.breakMinutes + '分'));
     card.appendChild(line('理由：' + r.reason));
     const msg = line('', 'p');
@@ -780,6 +790,289 @@ document.getElementById('rp-export').addEventListener('click', async function ()
 function ymLabel(ym) { const p = ym.split('-'); return p[0] + '年' + Number(p[1]) + '月'; }
 function hoursText(minutes) { return hours(minutes / 60) + '時間'; }
 
+// ---- 言語（働く人） ----
+
+function loadLanguage() {
+  document.getElementById('lang-current').textContent = t('lang_now');
+  document.getElementById('lang-result').textContent = '';
+  document.querySelectorAll('.lang-btn').forEach(function (b) { b.classList.toggle('chosen', b.getAttribute('data-lang') === LANG); });
+}
+
+document.querySelectorAll('.lang-btn').forEach(function (b) {
+  b.addEventListener('click', async function () {
+    const result = document.getElementById('lang-result');
+    document.querySelectorAll('.lang-btn').forEach(function (x) { x.disabled = true; });
+    try {
+      const res = await api('setLanguage', { language: b.getAttribute('data-lang') });
+      if (!res.ok) { result.textContent = errorText(res); return; }
+      me = res;
+      applyLang(me.language);
+      loadLanguage();
+      result.textContent = t('lang_changed');
+    } catch (err) {
+      result.textContent = t('network');
+    } finally {
+      document.querySelectorAll('.lang-btn').forEach(function (x) { x.disabled = false; });
+    }
+  });
+});
+
+// ---- 従業員管理（管理者） ----
+
+const LANG_NAME = { ja: '日本語', id: 'インドネシア語' };
+// 「いつもの控除・手当」の項目（GASの DEFAULT_ITEMS と同じ）
+const PAY_ITEM_KEYS = ['position_allowance', 'qualification_allowance', 'housing_allowance', 'family_allowance', 'night_shift_allowance',
+  'health_insurance', 'care_insurance', 'pension', 'pension_fund', 'employment_insurance', 'resident_tax', 'dorm_fee', 'utilities', 'toilet_cleaning'];
+let employees = { rows: [], myEmployeeId: '' };
+
+async function loadEmployees() {
+  document.getElementById('emp-result').textContent = '読み込み中…';
+  document.getElementById('emp-invite').textContent = '';
+  document.getElementById('emp-detail').textContent = '';
+  const res = await api('adminEmployees');
+  document.getElementById('emp-result').textContent = res.ok ? '' : errorText(res);
+  if (res.ok) { employees = res; renderEmployees(); }
+}
+
+function renderEmployees() {
+  const box = document.getElementById('emp-list');
+  box.textContent = '';
+  employees.rows.slice().sort(function (a, b) { return (b.active - a.active) || a.employeeId.localeCompare(b.employeeId); }).forEach(function (e) {
+    const card = document.createElement('div');
+    card.className = 'card emp' + (e.active ? '' : ' retired');
+    const name = line(e.name + '　' + e.employeeId, 'strong');
+    name.className = 'link';
+    name.addEventListener('click', function () { openEmployee(e.employeeId); });
+    card.appendChild(name);
+    card.appendChild(line('時給 ' + yen(e.hourlyWage) + '　' + LANG_NAME[e.language], 'div'));
+    const state = !e.active ? '退職（' + e.retiredAt + '）' : e.registered ? 'LINE登録済み' : '未登録' + (e.inviteCode ? '（招待コード ' + e.inviteCode + '）' : '（招待コードなし：再発行してください）');
+    card.appendChild(line(state, 'div')).className = 'muted small';
+    box.appendChild(card);
+  });
+}
+
+document.getElementById('emp-add-form').addEventListener('submit', async function (ev) {
+  ev.preventDefault();
+  const btn = document.getElementById('emp-add-submit');
+  const result = document.getElementById('emp-result');
+  btn.disabled = true;
+  try {
+    const res = await api('adminEmployeeSave', {
+      name: document.getElementById('emp-add-name').value.trim(),
+      hourlyWage: document.getElementById('emp-add-wage').value.trim(),
+      language: document.getElementById('emp-add-lang').value,
+    });
+    if (!res.ok) { result.textContent = errorText(res); return; }
+    employees.rows = res.rows;
+    renderEmployees();
+    result.textContent = '追加しました（' + res.employeeId + '）。';
+    ev.target.reset();
+    showInvite(res.employeeId, res.inviteCode);
+  } catch (err) {
+    result.textContent = '通信に失敗しました。';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// 招待コードと、本人にそのまま送れる案内文（本人の言語で）を出す
+function showInvite(employeeId, code) {
+  const e = employees.rows.find(function (x) { return x.employeeId === employeeId; }) || {};
+  const box = document.getElementById('emp-invite');
+  box.textContent = '';
+  const card = document.createElement('div');
+  card.className = 'card invite';
+  card.appendChild(line((e.name || '') + ' さんの招待コード', 'strong'));
+  card.appendChild(line(code, 'div')).className = 'code';
+  const message = e.language === 'id'
+    ? 'Ini kode undangan untuk absensi di LINE.\nBuka menu akun resmi LINE, lalu masukkan kode ini di layar yang muncul untuk mendaftar.\nKode: ' + code + '\n(Berlaku sampai ' + (e.inviteExpires || '') + ')'
+    : 'LINE勤怠の招待コードです。\n公式アカウントのメニューを開き、表示された画面にこのコードを入れて登録してください。\nコード：' + code + '\n（有効期限：' + (e.inviteExpires || '') + '）';
+  const pre = line(message, 'pre');
+  card.appendChild(pre);
+  const copy = button('案内文をコピー', 'admin-btn');
+  copy.addEventListener('click', async function () {
+    try { await navigator.clipboard.writeText(message); copy.textContent = 'コピーしました'; }
+    catch (err) { copy.textContent = 'コピーできませんでした。上の文を長押ししてコピーしてください'; }
+  });
+  card.appendChild(copy);
+  card.appendChild(line('この文を本人にLINEで送ってください。', 'p')).className = 'muted small';
+  box.appendChild(card);
+  box.scrollIntoView({ behavior: 'smooth' });
+}
+
+function openEmployee(employeeId) {
+  const e = employees.rows.find(function (x) { return x.employeeId === employeeId; });
+  const box = document.getElementById('emp-detail');
+  box.textContent = '';
+  document.getElementById('emp-invite').textContent = '';
+  if (!e) return;
+  box.appendChild(line(e.name + ' さん（' + e.employeeId + '）', 'h2'));
+  const msg = line('', 'p');
+  msg.className = 'result';
+
+  if (!e.active) {
+    box.appendChild(line('退職しています（' + e.retiredAt + '）。勤怠と給与の記録は残っています。', 'p')).className = 'muted';
+    box.scrollIntoView({ behavior: 'smooth' });
+    return;
+  }
+
+  // 名前・時給・言語
+  const form = document.createElement('div');
+  form.className = 'card';
+  const name = field(form, '名前', 'text', e.name);
+  const wage = field(form, '時給（円）', 'number', e.hourlyWage);
+  form.appendChild(line('言語', 'label'));
+  const lang = document.createElement('select');
+  Object.keys(LANG_NAME).forEach(function (k) { const o = line(LANG_NAME[k], 'option'); o.value = k; lang.appendChild(o); });
+  lang.value = e.language;
+  form.appendChild(lang);
+  form.appendChild(line('言語を変えると、本人の画面とメニューもその言語になります。', 'p')).className = 'muted small';
+  const save = button('名前・時給・言語を保存', 'admin-btn');
+  save.addEventListener('click', function () {
+    empAction(save, msg, 'adminEmployeeSave', { employeeId: e.employeeId, name: name.value.trim(), hourlyWage: wage.value.trim(), language: lang.value }, '保存しました。');
+  });
+  form.appendChild(save);
+  box.appendChild(form);
+
+  // いつもの控除・手当
+  const pay = document.createElement('div');
+  pay.className = 'card';
+  pay.appendChild(line('いつもの控除・手当（毎月の給与計算に自動で入ります）', 'strong'));
+  const inputs = {};
+  PAY_ITEM_KEYS.forEach(function (k) { inputs[k] = field(pay, labelOf(k) + '（円）', 'text', e.payItems[k]); inputs[k].inputMode = 'numeric'; });
+  const savePay = button('控除・手当を保存', 'admin-btn');
+  savePay.addEventListener('click', function () {
+    const values = {};
+    PAY_ITEM_KEYS.forEach(function (k) { values[k] = inputs[k].value.trim(); });
+    empAction(savePay, msg, 'adminPayItemsSave', { employeeId: e.employeeId, values: values }, '控除・手当を保存しました。次の給与計算から使われます。');
+  });
+  pay.appendChild(savePay);
+  box.appendChild(pay);
+
+  // 招待コードの再発行
+  const inv = document.createElement('div');
+  inv.className = 'card';
+  inv.appendChild(line('招待コード', 'strong'));
+  inv.appendChild(line(e.registered ? 'LINE登録済みです。スマホを替えたときなどに、新しいコードを出せます（前のLINEは使えなくなります）。'
+    : e.inviteCode ? '今のコード：' + e.inviteCode + '（有効期限 ' + e.inviteExpires + '）' : '使えるコードがありません。', 'p')).className = 'muted small';
+  const reissue = button('招待コードを再発行', 'secondary');
+  reissue.addEventListener('click', async function () {
+    if (!confirm('新しい招待コードを出します。前のコードは使えなくなります。よろしいですか？')) return;
+    const res = await empAction(reissue, msg, 'adminInviteReissue', { employeeId: e.employeeId }, '新しい招待コードを出しました。');
+    if (res && res.ok) showInvite(e.employeeId, res.inviteCode);
+  });
+  inv.appendChild(reissue);
+  box.appendChild(inv);
+
+  // 退職
+  if (e.employeeId !== employees.myEmployeeId) {
+    const ret = document.createElement('div');
+    ret.className = 'card';
+    ret.appendChild(line('退職', 'strong'));
+    ret.appendChild(line('退職にすると、本人はLINEの画面を使えなくなります。勤怠と給与の記録は消えません。', 'p')).className = 'muted small';
+    const reason = document.createElement('textarea');
+    reason.rows = 2;
+    reason.maxLength = 200;
+    reason.placeholder = '退職の理由（必須）例：帰国のため';
+    ret.appendChild(reason);
+    const retire = button('退職にする', 'danger');
+    retire.addEventListener('click', function () {
+      if (!reason.value.trim()) { msg.textContent = '退職の理由を入れてください。'; return; }
+      if (!confirm(e.name + ' さんを退職にします。よろしいですか？')) return;
+      empAction(retire, msg, 'adminRetire', { employeeId: e.employeeId, reason: reason.value.trim() }, '退職にしました。');
+    });
+    ret.appendChild(retire);
+    box.appendChild(ret);
+  }
+  box.appendChild(msg);
+  box.scrollIntoView({ behavior: 'smooth' });
+}
+
+// 従業員管理の保存ボタンの共通の動き。成功したら一覧を新しくして、開いていた人を開き直す
+async function empAction(btn, msg, action, data, okText) {
+  btn.disabled = true;
+  try {
+    const res = await api(action, data);
+    if (!res.ok) { msg.textContent = errorText(res) + (res.item ? '（' + labelOf(res.item) + '）' : ''); return res; }
+    employees.rows = res.rows;
+    renderEmployees();
+    openEmployee(data.employeeId);
+    const newMsg = document.querySelector('#emp-detail .result');
+    if (newMsg) newMsg.textContent = okText; else document.getElementById('emp-result').textContent = okText;
+    return res;
+  } catch (err) {
+    msg.textContent = '通信に失敗しました。';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function field(parent, labelText, type, value) {
+  parent.appendChild(line(labelText, 'label'));
+  const inp = document.createElement('input');
+  inp.type = type;
+  inp.value = value === undefined || value === null ? '' : String(value);
+  inp.setAttribute('aria-label', labelText);
+  parent.appendChild(inp);
+  return inp;
+}
+
+// ---- 設定（管理者） ----
+
+const SETTING_LABEL = {
+  pay_day: '支払日', round_unit: '勤務時間の区切り', clock_out_threshold: '退勤の境目', overtime_after_minutes: '残業になる時間',
+  overtime_rate: '残業の割増', night_rate: '深夜の割増', minimum_wage: '最低賃金', default_break_minutes: '休憩の初期値',
+};
+
+async function loadSettings() {
+  const result = document.getElementById('settings-result');
+  result.textContent = '読み込み中…';
+  const res = await api('adminSettings');
+  if (!res.ok) { result.textContent = errorText(res); return; }
+  result.textContent = '';
+  fillSettings(res.values);
+}
+
+function fillSettings(v) {
+  const set = function (id, value) { document.getElementById(id).value = value; };
+  set('set-pay_day', v.pay_day);
+  set('set-round_unit', String(v.round_unit));
+  set('set-clock_out_threshold', v.clock_out_threshold);
+  set('set-overtime_hours', Number(v.overtime_after_minutes) / 60);
+  set('set-overtime_pct', Math.round(Number(v.overtime_rate) * 100));
+  set('set-night_pct', Math.round(Number(v.night_rate) * 100));
+  set('set-minimum_wage', v.minimum_wage);
+  set('set-default_break_minutes', v.default_break_minutes);
+}
+
+document.getElementById('settings-form').addEventListener('submit', async function (ev) {
+  ev.preventDefault();
+  const result = document.getElementById('settings-result');
+  const get = function (id) { return document.getElementById(id).value.trim(); };
+  const pct = function (id) { return get(id) === '' ? '' : String(Number(get(id)) / 100); };
+  const btn = document.getElementById('settings-submit');
+  btn.disabled = true;
+  try {
+    const res = await api('adminSettingsSave', { values: {
+      pay_day: get('set-pay_day'),
+      round_unit: get('set-round_unit'),
+      clock_out_threshold: get('set-clock_out_threshold'),
+      overtime_after_minutes: get('set-overtime_hours') === '' ? '' : String(Math.round(Number(get('set-overtime_hours')) * 60)),
+      overtime_rate: pct('set-overtime_pct'),
+      night_rate: pct('set-night_pct'),
+      minimum_wage: get('set-minimum_wage'),
+      default_break_minutes: get('set-default_break_minutes'),
+    } });
+    if (!res.ok) { result.textContent = errorText(res) + (res.item ? '（' + SETTING_LABEL[res.item] + '）' : ''); return; }
+    fillSettings(res.values);
+    result.textContent = res.changed ? '保存しました（' + res.changed + '項目）。' : '変わった項目はありませんでした。';
+  } catch (err) {
+    result.textContent = '通信に失敗しました。';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // ---- 給与明細（働く人） ----
 
 async function loadPayslipList() {
@@ -787,13 +1080,12 @@ async function loadPayslipList() {
   const months = document.getElementById('ps-months');
   months.textContent = '';
   document.getElementById('ps-detail').textContent = '';
-  status.textContent = '読み込み中…';
+  status.textContent = t('loading');
   const res = await api('payslipList');
   if (!res.ok) { status.textContent = errorText(res); return; }
-  status.textContent = res.months.length ? '見たい月を選んでください。' : 'まだ確定した給与明細はありません。';
+  status.textContent = res.months.length ? t('pick_month') : t('no_slip');
   res.months.forEach(function (m) {
-    const p = m.split('-');
-    const b = button(p[0] + '年' + Number(p[1]) + '月分', 'secondary');
+    const b = button(monthLabel(m), 'secondary');
     b.addEventListener('click', function () { loadPayslip(m); });
     months.appendChild(b);
   });
@@ -801,26 +1093,35 @@ async function loadPayslipList() {
 
 async function loadPayslip(month) {
   const box = document.getElementById('ps-detail');
-  box.textContent = '読み込み中…';
+  box.textContent = t('loading');
   const res = await api('payslip', { month: month });
   box.textContent = '';
   if (!res.ok) { box.appendChild(line(errorText(res), 'p')); return; }
-  const p = month.split('-');
-  box.appendChild(line(p[0] + '年' + Number(p[1]) + '月分　' + res.slip.name, 'h2'));
-  if (res.payDay) box.appendChild(line('支払日：' + res.payDay + '日', 'p')).className = 'muted';
-  renderSlip(box, res.slip, false);
+  box.appendChild(line(monthLabel(month) + '　' + res.slip.name, 'h2'));
+  if (res.payDay) box.appendChild(line(t('pay_day', res.payDay), 'p')).className = 'muted';
+  if (LANG === 'id') box.appendChild(line(t('slip_note'), 'p')).className = 'muted small';
+  renderSlip(box, res.slip, false, LANG);
 }
 
 // 明細を紙と同じ並びで出す。editable なら手入力の項目を入力欄にする
-function renderSlip(box, r, editable) {
+// lang が 'id' なら項目名をインドネシア語にして、下に小さく日本語を添える（管理者の画面は日本語だけ）
+function renderSlip(box, r, editable, lang) {
+  const label = function (key, ja) {
+    if (lang !== 'id' || !SLIP_ID[key]) return line(ja, 'th');
+    const th = line(SLIP_ID[key], 'th');
+    th.appendChild(line(ja, 'span')).className = 'ja-sub';
+    return th;
+  };
   SLIP_LAYOUT.forEach(function (section) {
-    box.appendChild(line(section[0], 'div')).className = 'slip-head';
+    const head = line(lang === 'id' ? SLIP_ID[section[0]] + '　' : section[0], 'div');
+    if (lang === 'id') head.appendChild(line(section[0], 'span')).className = 'ja-sub-inline';
+    box.appendChild(head).className = 'slip-head';
     const table = document.createElement('table');
     table.className = 'slip';
     section[1].forEach(function (item) {
       const key = item[0];
       const tr = document.createElement('tr');
-      tr.appendChild(line(item[1], 'th'));
+      tr.appendChild(label(key, item[1]));
       const td = document.createElement('td');
       if (editable && EDITABLE.indexOf(key) >= 0) {
         const inp = document.createElement('input');
@@ -831,7 +1132,7 @@ function renderSlip(box, r, editable) {
         inp.setAttribute('aria-label', item[1]);
         td.appendChild(inp);
       } else {
-        td.textContent = slipValue(r[key], item[2]);
+        td.textContent = slipValue(r[key], item[2], lang);
       }
       tr.appendChild(td);
       table.appendChild(tr);
@@ -840,21 +1141,22 @@ function renderSlip(box, r, editable) {
   });
   const totals = document.createElement('table');
   totals.className = 'slip totals';
-  [['総支給額合計', r.gross_total], ['控除総計', r.deduction_total], ['差引支給額', r.net_pay]].forEach(function (t) {
+  [['gross_total', '総支給額合計'], ['deduction_total', '控除総計'], ['net_pay', '差引支給額']].forEach(function (x) {
     const tr = document.createElement('tr');
-    tr.appendChild(line(t[0], 'th'));
-    tr.appendChild(line(yen(t[1]), 'td'));
+    tr.appendChild(label(x[0], x[1]));
+    tr.appendChild(line(slipValue(r[x[0]] === '' ? 0 : r[x[0]], '円', lang), 'td'));
     totals.appendChild(tr);
   });
   box.appendChild(totals);
 }
 
-function slipValue(v, unit) {
+function slipValue(v, unit, lang) {
   if (v === '' || v === null || v === undefined) return '';
-  if (unit === '円') return yen(v);
-  if (unit === 'H') return hours(Number(v) / 60) + ' H';
-  if (unit === 'h') return hours(Number(v)) + ' H';
-  return v + ' ' + unit;
+  const id = lang === 'id';
+  if (unit === '円') return id ? (Number(v) || 0).toLocaleString('ja-JP') + ' yen' : yen(v);
+  if (unit === 'H') return hours(Number(v) / 60) + (id ? ' jam' : ' H');
+  if (unit === 'h') return hours(Number(v)) + (id ? ' jam' : ' H');
+  return v + ' ' + (id && unit === '日' ? 'hari' : unit);
 }
 
 function hours(h) { return String(Math.round(h * 100) / 100); }
@@ -888,7 +1190,7 @@ document.getElementById('back-to-admin').addEventListener('click', function () {
 // 画面に出す小さな部品。サーバーから来た文字はすべて textContent で入れる
 function text(s) { return document.createTextNode(s); }
 function line(s, tagName) { const el = document.createElement(tagName || 'div'); el.textContent = s; return el; }
-function tag(status) { const el = document.createElement('span'); el.className = 'tag ' + status; el.textContent = STATUS_TEXT[status] || status; return el; }
+function tag(status) { const el = document.createElement('span'); el.className = 'tag ' + status; el.textContent = statusText(status); return el; }
 function button(label, cls) { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; if (cls) b.className = cls; return b; }
 
 function fillRows(tbodyId, rows) {
@@ -901,9 +1203,14 @@ function fillRows(tbodyId, rows) {
   });
 }
 
-function describe(rec) {
-  if (!rec) return '記録なし';
-  return rec.clockIn + '〜' + (rec.clockOut || '退勤なし') + (rec.breakMinutes === null ? '' : ' 休憩' + rec.breakMinutes + '分');
+// 1日の記録を短い文に。管理者の画面は lang='ja' で呼ぶ
+function describe(rec, lang) {
+  const saved = LANG;
+  if (lang) LANG = lang;
+  const s = !rec ? t('no_record')
+    : rec.clockIn + '〜' + (rec.clockOut || t('no_clock_out')) + (rec.breakMinutes === null ? '' : t('break_min', rec.breakMinutes));
+  LANG = saved;
+  return s;
 }
 
 // 「8:05」→「08:05」（時刻の入力欄が2桁を求めるため）
@@ -933,13 +1240,13 @@ document.getElementById('register-form').addEventListener('submit', async functi
     const code = document.getElementById('invite-code').value.trim().toUpperCase();
     const res = await api('register', { code: code });
     if (!res.ok && (res.error === 'invalid_code' || res.error === 'code_used')) {
-      msg.textContent = ERROR_TEXT[res.error];
+      msg.textContent = ERROR_TEXT[res.error] + ' / ' + ERROR_TEXT_ID[res.error];
       return;
     }
     me = res;
     route(new URLSearchParams(location.search).get('page'));
   } catch (err) {
-    msg.textContent = '通信に失敗しました。電波のよい所でもう一度試してください。';
+    msg.textContent = MSG.network[0] + ' / ' + MSG.network[1];
   } finally {
     button.disabled = false;
   }
@@ -949,14 +1256,17 @@ document.getElementById('register-form').addEventListener('submit', async functi
 function tick() {
   const now = new Date();
   const text = now.getHours() + ':' + String(now.getMinutes()).padStart(2, '0');
-  document.querySelectorAll('.clock-now').forEach(function (el) { el.textContent = '今 ' + text; });
+  document.querySelectorAll('.clock-now').forEach(function (el) { el.textContent = t('now', text); });
 }
 tick();
 setInterval(tick, 10000);
 
-function duration(minutes) {
+// 分 →「8時間30分」／「8 jam 30 menit」
+function duration(minutes, lang) {
+  const id = (lang || LANG) === 'id';
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
+  if (id) return h === 0 ? m + ' menit' : h + ' jam' + (m ? ' ' + m + ' menit' : '');
   if (h === 0) return m + '分';
   return h + '時間' + (m ? m + '分' : '');
 }
